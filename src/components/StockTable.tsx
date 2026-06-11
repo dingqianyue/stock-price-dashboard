@@ -3,14 +3,15 @@ import type { StockData } from '../types';
 
 interface StockTableProps {
   stocks: StockData[];
-  onDelete: (symbol: string) => void; 
+  onDelete: (symbol: string) => void;
+  onSelect: (symbol: string) => void;
 }
 
 // Define the keys we can sort by and the possible sort directions
 type SortKey = 'symbol' | 'price' | 'change' | 'changePercent';
 type SortDirection = 'asc' | 'desc';
 
-export default function StockTable({ stocks, onDelete }: StockTableProps) {
+export default function StockTable({ stocks, onDelete, onSelect }: StockTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>('symbol');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
@@ -64,7 +65,15 @@ export default function StockTable({ stocks, onDelete }: StockTableProps) {
 
             return (
               <tr key={stock.symbol} className="hover:bg-gray-50 transition-colors group">
-                <td className="p-4 font-bold text-gray-900">{stock.symbol}</td>
+                <td className="p-4 font-bold">
+                  <button 
+                    type="button"
+                    onClick={() => onSelect(stock.symbol)}
+                    className="text-gray-900 hover:text-blue-600 transition-colors"
+                  >
+                    {stock.symbol}
+                  </button>
+                </td>
                 <td className="p-4 text-right font-medium">${stock.price.toFixed(2)}</td>
                 <td className={`p-4 text-right font-medium ${colorClass}`}>
                   {isPositive ? '+' : ''}{stock.change.toFixed(2)} ({stock.changePercent.toFixed(2)}%)

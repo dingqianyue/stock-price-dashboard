@@ -17,3 +17,8 @@ export interface StockData {
   change: number;
   changePercent: number;
 }
+
+export interface ChartDataPoint {
+  date: string;
+  price: number;
+}

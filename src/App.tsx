@@ -2,7 +2,8 @@ import './App.css'
 
 import { useState, useEffect } from 'react';
 import StockTable from './components/StockTable';
-import type { FinnhubQuote, StockData } from './types';
+import StockChart from './components/StockChart';
+import type { FinnhubQuote, StockData, ChartDataPoint } from './types';
 
 // Default watchlist used only if the user has no saved data
 const DEFAULT_WATCHLIST = ['META', 'AMZN', 'AAPL', 'NFLX', 'GOOGL'];
@@ -23,6 +24,12 @@ function App() {
   const [searchInput, setSearchInput] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+
+  // Chart states
+  const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
+  const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
+  const [isChartLoading, setIsChartLoading] = useState<boolean>(false);
+  const [isMockData, setIsMockData] = useState<boolean>(false); // NEW: Track if data is simulated
 
   useEffect(() => {
     const fetchStockData = async () => {
@@ -67,7 +74,67 @@ function App() {
     };
 
     fetchStockData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Fetch historical data when a stock is selected
+  useEffect(() => {
+    if (!selectedSymbol) return;
+
+    const fetchChartData = async () => {
+      setIsChartLoading(true);
+      setIsMockData(false); // Reset the mock state on every new fetch
+      
+      try {
+        const to = Math.floor(Date.now() / 1000);
+        const from = to - (180 * 24 * 60 * 60);
+
+        const response = await fetch(`https://finnhub.io/api/v1/stock/candle?symbol=${selectedSymbol}&resolution=D&from=${from}&to=${to}&token=${API_KEY}`);
+        
+        // If Finnhub throws a 403 Forbidden, force it into the catch block
+        if (!response.ok) {
+           throw new Error(`API returned ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        // If Finnhub returns no data silently, force it into the catch block
+        if (data.s === 'no_data' || data.error) {
+           throw new Error('No historical data available');
+        }
+
+        const formattedData: ChartDataPoint[] = data.t.map((timestamp: number, index: number) => {
+          const dateObj = new Date(timestamp * 1000);
+          return {
+            date: `${dateObj.getMonth() + 1}/${dateObj.getDate()}`, 
+            price: data.c[index]
+          };
+        });
+
+        setChartData(formattedData.slice(-30));
+      } catch (err) {
+        // Catch the 403 error and generate realistic visual data for the UI
+        console.warn(`Finnhub API blocked historical data for ${selectedSymbol}. Using UI fallback.`);
+        setIsMockData(true); // Flag this data as simulated
+        
+        const currentPrice = stocks.find(s => s.symbol === selectedSymbol)?.price || 150;
+        const fallbackData: ChartDataPoint[] = Array.from({ length: 30 }).map((_, i) => {
+          const d = new Date();
+          d.setDate(d.getDate() - (30 - i)); 
+          return {
+            date: `${d.getMonth() + 1}/${d.getDate()}`,
+            price: currentPrice + (Math.random() * (currentPrice * 0.1) - (currentPrice * 0.05))
+          };
+        });
+        
+        setChartData(fallbackData);
+      } finally {
+        setIsChartLoading(false);
+      }
+    };
+
+    fetchChartData();
+  }, [selectedSymbol, stocks]);
 
   const handleAddStock = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -123,6 +190,11 @@ function App() {
       localStorage.setItem('valueglance_watchlist', JSON.stringify(updated));
       return updated;
     });
+
+    // Clear the chart if the deleted stock was currently selected
+    if (selectedSymbol === symbolToRemove) {
+      setSelectedSymbol(null);
+    }
   };
 
   return (
@@ -134,6 +206,26 @@ function App() {
           <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Stock Price Dashboard</h1>
           <p className="text-gray-500 mt-1">View the latest market data for your favorite stocks</p>
         </header>
+
+        {/* The Chart & Warning Message */}
+        {selectedSymbol && (
+          <div className="flex flex-col gap-2">
+            <StockChart 
+              symbol={selectedSymbol} 
+              data={chartData} 
+              isLoading={isChartLoading} 
+            />
+            {/* Conditional Warning Note */}
+            {isMockData && !isChartLoading && (
+              <div className="bg-amber-50 border border-amber-200 text-amber-700 text-sm px-4 py-3 rounded-lg flex items-start">
+                <span className="mr-2">⚠️</span>
+                <p>
+                  <strong>Note:</strong> Historical data for <strong>{selectedSymbol}</strong> is restricted by the free Finnhub API. The chart above displays simulated trend data for UI demonstration purposes.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Search Bar */}
         <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -172,7 +264,7 @@ function App() {
           </div>
         ) : (
           /* The Main Data Table */
-          !error && <StockTable stocks={stocks} onDelete={handleDeleteStock} />
+          !error && <StockTable stocks={stocks} onDelete={handleDeleteStock} onSelect={setSelectedSymbol} />
         )}
 
       </div>
