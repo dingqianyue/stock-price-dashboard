@@ -1,122 +1,95 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
 import './App.css'
 
+import { useState, useEffect } from 'react';
+import StockTable from './components/StockTable';
+import type { FinnhubQuote, StockData } from './types';
+
+// Default watchlist of FAANG stocks to display on the dashboard
+const WATCHLIST = ['META', 'AMZN', 'AAPL', 'NFLX', 'GOOGL'];
+const API_KEY = import.meta.env.VITE_FINNHUB_API_KEY;
+
 function App() {
-  const [count, setCount] = useState(0)
+  const [stocks, setStocks] = useState<StockData[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchStockData = async () => {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const promises = WATCHLIST.map(async (symbol) => {
+          // Finnhub /quote endpoint
+          const response = await fetch(
+            `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${API_KEY}`
+          );
+          
+          if (!response.ok) {
+            throw new Error(`Failed to fetch data for ${symbol}`);
+          }
+
+          const data: FinnhubQuote = await response.json();
+          
+          return {
+            symbol,
+            price: data.c,
+            change: data.d,
+            changePercent: data.dp,
+          };
+        });
+
+        // Wait for all the individual stock calls to finish
+        const results = await Promise.all(promises);
+        const validStocks = results.filter(
+          (stock) => stock.price > 0 && stock.change !== null && stock.change !== undefined
+        );
+
+        setStocks(validStocks);
+
+      } catch (err) {
+        console.error("API Error:", err);
+        setError('Failed to load market data. Please check your API key or try again later.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchStockData();
+  }, []);
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <div className="min-h-screen bg-gray-50 p-8 font-sans">
+      <div className="max-w-4xl mx-auto space-y-6">
+        
+        {/* Header */}
+        <header className="mb-8 border-b pb-4">
+          <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Stock Price Dashboard</h1>
+          <p className="text-gray-500 mt-1">View the latest market data for your favorite stocks</p>
+        </header>
 
-      <div className="ticks"></div>
+        {/* Error State */}
+        {error && (
+          <div className="bg-rose-50 text-rose-700 p-4 rounded-lg border border-rose-200">
+            {error}
+          </div>
+        )}
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+        {/* Loading State */}
+        {isLoading && !error ? (
+          <div className="flex items-center justify-center py-20">
+            <div className="animate-pulse text-gray-400 font-medium tracking-wide">
+              Fetching latest market data...
+            </div>
+          </div>
+        ) : (
+          /* The Main Data Table */
+          !error && <StockTable stocks={stocks} />
+        )}
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+      </div>
+    </div>
+  );
 }
 
-export default App
+export default App;
