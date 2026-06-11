@@ -59,7 +59,10 @@ export default function StockChart({ symbol, data, isLoading }: StockChartProps)
             <Tooltip 
               contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
               itemStyle={{ color: '#0ea5e9', fontWeight: 'bold' }}
-              formatter={(value: number) => [`$${value.toFixed(2)}`, 'Price']}
+              formatter={(value: any) => {
+                const numValue = Number(value) || 0;
+                return [`$${numValue.toFixed(2)}`, 'Price'];
+              }}
             />
             <Area 
               type="monotone" 
